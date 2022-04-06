@@ -1,6 +1,8 @@
-from aws_cdk import CfnOutput, Stack
+from aws_cdk import CfnOutput, Stack, Duration
 import aws_cdk.aws_ec2 as ec2
-import aws_cdk.aws_elasticloadbalancingv2 as elb
+import aws_cdk.aws_ecs as ecs
+import aws_cdk.aws_ecs_patterns as ecs_patterns
+import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_autoscaling as autoscaling
 from constructs import Construct
 
@@ -32,49 +34,73 @@ class CdkPrivateStack(Stack):
         bastion.connections.allow_from_any_ipv4(
             ec2.Port.tcp(22), "Internet access SSH")
 
+        cluster = ecs.Cluster(
+            self, 'EcsCluster',
+            vpc=vpc
+        )
+
+        asg = autoscaling.AutoScalingGroup(
+            self, "DefaultAutoScalingGroup",
+            instance_type=ec2.InstanceType.of(
+                                ec2.InstanceClass.BURSTABLE3,
+                                ec2.InstanceSize.MICRO),
+            machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
+            vpc=vpc,
+        )
+        capacity_provider = ecs.AsgCapacityProvider(self, "AsgCapacityProvider",
+            auto_scaling_group=asg
+        )
+        cluster.add_asg_capacity_provider(capacity_provider)
+
+        # Create Task Definition
+        task_definition = ecs.Ec2TaskDefinition(
+            self, "TaskDef")
+        container = task_definition.add_container(
+            "web",
+            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
+            memory_limit_mib=256
+        )
+        port_mapping = ecs.PortMapping(
+            container_port=80,
+            host_port=8080,
+            protocol=ecs.Protocol.TCP
+        )
+        container.add_port_mappings(port_mapping)
+
+        # Create Service
+        service = ecs.Ec2Service(
+            self, "Service",
+            cluster=cluster,
+            task_definition=task_definition
+        )
+
         # Create ALB
-        alb = elb.ApplicationLoadBalancer(self, "myALB",
-                                          vpc=vpc,
-                                          internet_facing=True,
-                                          load_balancer_name="myALB"
-                                          )
-        alb.connections.allow_from_any_ipv4(
-            ec2.Port.tcp(80), "Internet access ALB 80")
-        listener = alb.add_listener("my80",
-                                    port=80,
-                                    open=True)
+        lb = elbv2.ApplicationLoadBalancer(
+            self, "LB",
+            vpc=vpc,
+            internet_facing=True
+        )
+        listener = lb.add_listener(
+            "PublicListener",
+            port=80,
+            open=True
+        )
 
-        # Create Autoscaling Group with fixed 2*EC2 hosts
-        self.asg = autoscaling.AutoScalingGroup(self, "myASG",
-                                                vpc=vpc,
-                                                vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_NAT),
-                                                instance_type=ec2.InstanceType(instance_type_identifier=ec2_type),
-                                                machine_image=linux_ami,
-                                                key_name=key_name,
-                                                desired_capacity=2,
-                                                min_capacity=2,
-                                                max_capacity=2,
-                                                # block_devices=[
-                                                #     autoscaling.BlockDevice(
-                                                #         device_name="/dev/xvda",
-                                                #         volume=autoscaling.BlockDeviceVolume.ebs(
-                                                #             volume_type=autoscaling.EbsDeviceVolumeType.GP2,
-                                                #             volume_size=12,
-                                                #             delete_on_termination=True
-                                                #         )),
-                                                #     autoscaling.BlockDevice(
-                                                #         device_name="/dev/sdb",
-                                                #         volume=autoscaling.BlockDeviceVolume.ebs(
-                                                #             volume_size=20)
-                                                #         # 20GB, with default volume_type gp2
-                                                #     )
-                                                # ]
-                                                )
+        health_check = elbv2.HealthCheck(
+            interval=Duration.seconds(60),
+            path="/health",
+            timeout=Duration.seconds(5)
+        )
 
-        self.asg.connections.allow_from(alb, ec2.Port.tcp(80), "ALB access 80 port of EC2 in Autoscaling Group")
-        listener.add_targets("addTargetGroup",
-                             port=80,
-                             targets=[self.asg])
+        # Attach ALB to ECS Service
+        listener.add_targets(
+            "ECS",
+            port=80,
+            targets=[service],
+            health_check=health_check,
+        )
 
-        CfnOutput(self, "Output",
-                       value=alb.load_balancer_dns_name)
+        CfnOutput(
+            self, "LoadBalancerDNS",
+            value=lb.load_balancer_dns_name
+        )
