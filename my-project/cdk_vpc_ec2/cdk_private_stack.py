@@ -13,7 +13,7 @@ linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LIN
                                  )  # Indicate your AMI, no need a specific id in the region
 
 
-class CdkEc2Stack(Stack):
+class CdkPrivateStack(Stack):
 
     def __init__(self, scope: Construct, id: str, vpc, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
