@@ -33,19 +33,6 @@ class CdkPrivateStack(Stack):
             vpc=vpc
         )
 
-        asg = autoscaling.AutoScalingGroup(
-            self, "DefaultAutoScalingGroup",
-            instance_type=ec2.InstanceType.of(
-                                ec2.InstanceClass.BURSTABLE3,
-                                ec2.InstanceSize.MICRO),
-            machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
-            vpc=vpc,
-        )
-        capacity_provider = ecs.AsgCapacityProvider(self, "AsgCapacityProvider",
-            auto_scaling_group=asg
-        )
-        cluster.add_asg_capacity_provider(capacity_provider)
-
         # Create Task Definition
         task_definition = ecs.Ec2TaskDefinition(
             self, "TaskDef")
