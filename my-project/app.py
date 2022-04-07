@@ -12,7 +12,6 @@ vpc_stack = CdkVpcStack(app, "cdk-vpc")
 private_stack = CdkPrivateStack(app, "cdk-private",
                         vpc=vpc_stack.vpc)
 rds_stack = CdkRdsStack(app, "cdk-rds",
-                        vpc=vpc_stack.vpc,
-                        asg_security_groups=private_stack.asg.connections.security_groups)
+                        vpc=vpc_stack.vpc)
 
 app.synth()
