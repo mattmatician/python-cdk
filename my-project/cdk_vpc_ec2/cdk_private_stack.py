@@ -4,6 +4,7 @@ import aws_cdk.aws_ecs as ecs
 import aws_cdk.aws_ecs_patterns as ecs_patterns
 import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_autoscaling as autoscaling
+import aws_cdk.aws_applicationautoscaling as appscaling
 from constructs import Construct
 
 ec2_type = "t2.micro"
@@ -75,15 +76,19 @@ class CdkPrivateStack(Stack):
             description="Allow http inbound from VPC"
         )
 
-        # Setup AutoScaling policy
-        scaling = fargate_service.service.auto_scale_task_count(
-            max_capacity=2
+        scalableTarget = fargate_service.service.auto_scale_task_count(
+            min_capacity = 1,
+            max_capacity = 3
         )
-        scaling.scale_on_cpu_utilization(
-            "CpuScaling",
-            target_utilization_percent=50,
-            scale_in_cooldown=Duration.seconds(60),
-            scale_out_cooldown=Duration.seconds(60),
+
+        scalableTarget.scale_on_schedule('DaytimeScaleDown',
+            schedule = appscaling.Schedule.cron(hour = "8", minute = "0"),
+            min_capacity = 1,
+        )
+
+        scalableTarget.scale_on_schedule('EveningRushScaleUp',
+            schedule = appscaling.Schedule.cron(hour = "20", minute = "0"),
+            min_capacity = 2,
         )
 
         CfnOutput(
