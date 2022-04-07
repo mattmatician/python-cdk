@@ -5,7 +5,7 @@ from constructs import Construct
 
 class CdkRdsStack(Stack):
 
-    def __init__(self, scope: Construct, id: str, vpc, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, vpc, private_security_groups, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         cluster = rds.DatabaseCluster(self, "MPB-Database",
@@ -15,3 +15,6 @@ class CdkRdsStack(Stack):
                 vpc_subnets=ec2.SubnetSelection(subnet_group_name="DB")
             )
         ) 
+
+        for sg in private_security_groups:
+            cluster.connections.allow_default_port_from(sg, "EC2 Autoscaling Group access Aurora")
