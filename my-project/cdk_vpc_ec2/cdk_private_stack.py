@@ -29,6 +29,16 @@ class CdkPrivateStack(Stack):
             vpc=vpc
         )
 
+        alb_security_group = ec2.SecurityGroup(self, "MPB-ALB-SG",
+            vpc=vpc
+        )
+
+        self.private_security_group.add_ingress_rule(
+            peer = alb_security_group,
+            connection = ec2.Port.tcp(9000),
+            description = "Allow ALB in"
+        )
+
         # Instance
         instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
@@ -114,7 +124,8 @@ class CdkPrivateStack(Stack):
         lb = elbv2.ApplicationLoadBalancer(
             self, "MPB-ALB",
             vpc=vpc,
-            internet_facing=True
+            internet_facing=True,
+            security_group = alb_security_group
         )
         listener8080 = lb.add_listener(
             "PublicListener8080",
