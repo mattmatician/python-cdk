@@ -57,19 +57,13 @@ class CdkPrivateStack(Stack):
         non_scaled_service = ecs.FargateService(self, "Service", cluster=clusterWithoutASG, task_definition=task_definition)
 
         # Create Fargate Service
-        fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
+        scaled_service = ecs.FargateService(
             self, "sample-app",
             cluster=clusterWithASG,
             task_definition=task_definition
         )
         
-        fargate_service.service.connections.security_groups[0].add_ingress_rule(
-            peer = ec2.Peer.ipv4(vpc.vpc_cidr_block),
-            connection = ec2.Port.tcp(80),
-            description="Allow http inbound from VPC"
-        )
-
-        scalableTarget = fargate_service.service.auto_scale_task_count(
+        scalableTarget = scaled_service.auto_scale_task_count(
             min_capacity = 1,
             max_capacity = 3
         )
@@ -84,7 +78,48 @@ class CdkPrivateStack(Stack):
             min_capacity = 2,
         )
 
+        # Create ALB
+        lb = elbv2.ApplicationLoadBalancer(
+            self, "MPB-ALB",
+            vpc=vpc,
+            internet_facing=True
+        )
+        listener8080 = lb.add_listener(
+            "PublicListener8080",
+            port=8080,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            open=True
+        )
+        listener8081 = lb.add_listener(
+            "PublicListener8081",
+            port=8081,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            open=True
+        )
+
+        health_check = elbv2.HealthCheck(
+            interval=Duration.seconds(60),
+            path="/health",
+            timeout=Duration.seconds(5)
+        )
+
+        # Attach ALB to ECS Service
+        listener8080.add_targets(
+            "ScaledECS",
+            port=80,
+            targets=[scaled_service],
+            health_check=health_check,
+        )
+
+        # Attach ALB to ECS Service
+        listener8081.add_targets(
+            "NonScaledECS",
+            port=80,
+            targets=[non_scaled_service],
+            health_check=health_check,
+        )
+
         CfnOutput(
             self, "LoadBalancerDNS",
-            value=fargate_service.load_balancer.load_balancer_dns_name
+            value=lb.load_balancer_dns_name
         )
