@@ -60,40 +60,33 @@ class CdkPrivateStack(Stack):
         )
         container.add_port_mappings(port_mapping)
 
-        # Create Service
-        service = ecs.Ec2Service(
-            self, "Service",
+        # Create Fargate Service
+        fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
+            self, "sample-app",
             cluster=cluster,
-            task_definition=task_definition
+            task_image_options={
+                'image': ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample")
+            }
         )
 
-        # Create ALB
-        lb = elbv2.ApplicationLoadBalancer(
-            self, "LB",
-            vpc=vpc,
-            internet_facing=True
-        )
-        listener = lb.add_listener(
-            "PublicListener",
-            port=80,
-            open=True
+        fargate_service.service.connections.security_groups[0].add_ingress_rule(
+            peer = ec2.Peer.ipv4(vpc.vpc_cidr_block),
+            connection = ec2.Port.tcp(80),
+            description="Allow http inbound from VPC"
         )
 
-        health_check = elbv2.HealthCheck(
-            interval=Duration.seconds(60),
-            path="/health",
-            timeout=Duration.seconds(5)
+        # Setup AutoScaling policy
+        scaling = fargate_service.service.auto_scale_task_count(
+            max_capacity=2
         )
-
-        # Attach ALB to ECS Service
-        listener.add_targets(
-            "ECS",
-            port=80,
-            targets=[service],
-            health_check=health_check,
+        scaling.scale_on_cpu_utilization(
+            "CpuScaling",
+            target_utilization_percent=50,
+            scale_in_cooldown=Duration.seconds(60),
+            scale_out_cooldown=Duration.seconds(60),
         )
 
         CfnOutput(
             self, "LoadBalancerDNS",
-            value=lb.load_balancer_dns_name
+            value=fargate_service.load_balancer.load_balancer_dns_name
         )
