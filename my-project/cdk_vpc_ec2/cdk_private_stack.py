@@ -22,20 +22,20 @@ class CdkPrivateStack(Stack):
         super().__init__(scope, id, **kwargs)
 
         # Instance
-        instance = ec2.Instance(self, "Instance",
+        instance = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             vpc = vpc,
         )
 
         cluster = ecs.Cluster(
-            self, 'EcsCluster',
+            self, 'MPB-EcsClusterWithASG',
             vpc=vpc
         )
 
         # Create Task Definition
         task_definition = ecs.Ec2TaskDefinition(
-            self, "TaskDef")
+            self, "MPB-TaskDef")
         container = task_definition.add_container(
             "web",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
