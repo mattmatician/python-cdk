@@ -9,10 +9,11 @@ from cdk_vpc_ec2.cdk_rds_stack import CdkRdsStack
 app = App()
 
 vpc_stack = CdkVpcStack(app, "cdk-vpc")
-private_stack = CdkPrivateStack(app, "cdk-private",
-                        vpc=vpc_stack.vpc)
 rds_stack = CdkRdsStack(app, "cdk-rds",
                         vpc=vpc_stack.vpc,
-                        private_security_groups=[private_stack.private_security_group])
+                        private_security_groups=[vpc_stack.private_security_group])
+private_stack = CdkPrivateStack(app, "cdk-private",
+                        vpc=vpc_stack.vpc,
+                        private_security_group=vpc_stack.private_security_group)
 
 app.synth()

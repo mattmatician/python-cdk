@@ -30,5 +30,11 @@ class CdkVpcStack(Stack):
                            # nat_gateway_provider=ec2.NatProvider.gateway(),
                            nat_gateways=3,
                            )
+
+        
+        self.private_security_group = ec2.SecurityGroup(self, "MPB-PrivateGroup",
+            vpc=self.vpc
+        )
+
         CfnOutput(self, "Output",
                        value=self.vpc.vpc_id)
