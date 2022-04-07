@@ -56,16 +56,26 @@ class CdkPrivateStack(Stack):
 
         # Create Task Definition
         task_definition = ecs.FargateTaskDefinition(
-            self, "MPB-TaskDef")
+            self, "MPB-TaskDef",
+            cpu=2048,
+            memory_limit_mib=8192
+        )
         
         container = task_definition.add_container(
-            "web",
-            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
-            memory_limit_mib=256
+            "sonarqube",
+            image=ecs.ContainerImage.from_registry("sonarqube:8.9.8-community"),
+            memory_limit_mib=2048,
+            command=["-Dsonar.search.javaAdditionalOpts=-Dnode.store.allow_mmap=false"],
+            environment = {
+                "SONAR_JDBC_USERNAME": "admin",
+                "SONAR_JDBC_PASSWORD": "password",
+                "SONAR_JDBC_URL": "postgresql:///",
+            }
         )
+
         port_mapping = ecs.PortMapping(
-            container_port=80,
-            host_port=80,
+            container_port=9000,
+            host_port=9000,
             protocol=ecs.Protocol.TCP
         )
         container.add_port_mappings(port_mapping)
