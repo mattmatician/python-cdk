@@ -25,11 +25,16 @@ class CdkPrivateStack(Stack):
         user_data_webserver.add_commands("sudo dnf install httpd")
         user_data_webserver.add_commands("sudo systemctl enable --now httpd")
 
+        self.private_security_group = ec2.SecurityGroup(self, "MPB-PrivateGroup",
+            vpc=vpc
+        )
+
         # Instance
         instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
+            security_group = self.private_security_group,
             vpc = vpc,
         )
 
@@ -39,6 +44,7 @@ class CdkPrivateStack(Stack):
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
+            security_group = self.private_security_group,
             vpc = vpc,
         )
 
