@@ -20,19 +20,12 @@ class CdkPrivateStack(Stack):
     def __init__(self, scope: Construct, id: str, vpc, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
-        # Create Bastion
-        bastion = ec2.BastionHostLinux(self, "myBastion",
-                                       vpc=vpc,
-                                       subnet_selection=ec2.SubnetSelection(
-                                           subnet_type=ec2.SubnetType.PUBLIC),
-                                       instance_name="myBastionHostLinux",
-                                       instance_type=ec2.InstanceType(instance_type_identifier="t2.micro"))
-
-        # Setup key_name for EC2 instance login if you don't use Session Manager
-        # bastion.instance.instance.add_property_override("KeyName", key_name)
-
-        bastion.connections.allow_from_any_ipv4(
-            ec2.Port.tcp(22), "Internet access SSH")
+        # Instance
+        instance = ec2.Instance(self, "Instance",
+            instance_type=ec2.InstanceType("t3.nano"),
+            machine_image=linux_ami,
+            vpc = vpc,
+        )
 
         cluster = ecs.Cluster(
             self, 'EcsCluster',
