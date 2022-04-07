@@ -5,6 +5,7 @@ import aws_cdk.aws_ecs_patterns as ecs_patterns
 import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_autoscaling as autoscaling
 import aws_cdk.aws_applicationautoscaling as appscaling
+import aws_cdk.aws_elasticloadbalancingv2_targets as targets
 from constructs import Construct
 
 ec2_type = "t2.micro"
@@ -15,18 +16,33 @@ linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LIN
                                  storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE
                                  )  # Indicate your AMI, no need a specific id in the region
 
-
 class CdkPrivateStack(Stack):
 
     def __init__(self, scope: Construct, id: str, vpc, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
+        user_data_webserver = ec2.UserData.for_linux()
+        user_data_webserver.add_commands("sudo dnf install httpd")
+        user_data_webserver.add_commands("sudo systemctl enable --now httpd")
+
         # Instance
         instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
+            user_data = user_data_webserver,
             vpc = vpc,
         )
+
+        instanceTarget1 = targets.InstanceTarget(instance=instance1)
+
+        instance2 = ec2.Instance(self, "MPB-Instance-2",
+            instance_type=ec2.InstanceType("t3.nano"),
+            machine_image=linux_ami,
+            user_data = user_data_webserver,
+            vpc = vpc,
+        )
+
+        instanceTarget2 = targets.InstanceTarget(instance=instance2)
 
         clusterWithASG = ecs.Cluster(
             self, 'MPB-EcsClusterWithASG',
