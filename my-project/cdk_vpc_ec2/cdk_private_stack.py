@@ -22,20 +22,26 @@ class CdkPrivateStack(Stack):
         super().__init__(scope, id, **kwargs)
 
         # Instance
-        instance = ec2.Instance(self, "MPB-Instance-1",
+        instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             vpc = vpc,
         )
 
-        cluster = ecs.Cluster(
+        clusterWithASG = ecs.Cluster(
             self, 'MPB-EcsClusterWithASG',
             vpc=vpc
         )
 
+        clusterWithoutASG = ecs.Cluster(
+            self, 'MPB-EcsClusterWithoutASG',
+            vpc=vpc
+        )
+
         # Create Task Definition
-        task_definition = ecs.Ec2TaskDefinition(
+        task_definition = ecs.FargateTaskDefinition(
             self, "MPB-TaskDef")
+        
         container = task_definition.add_container(
             "web",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
@@ -43,20 +49,20 @@ class CdkPrivateStack(Stack):
         )
         port_mapping = ecs.PortMapping(
             container_port=80,
-            host_port=8080,
+            host_port=80,
             protocol=ecs.Protocol.TCP
         )
         container.add_port_mappings(port_mapping)
 
+        non_scaled_service = ecs.FargateService(self, "Service", cluster=clusterWithoutASG, task_definition=task_definition)
+
         # Create Fargate Service
         fargate_service = ecs_patterns.ApplicationLoadBalancedFargateService(
             self, "sample-app",
-            cluster=cluster,
-            task_image_options={
-                'image': ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample")
-            }
+            cluster=clusterWithASG,
+            task_definition=task_definition
         )
-
+        
         fargate_service.service.connections.security_groups[0].add_ingress_rule(
             peer = ec2.Peer.ipv4(vpc.vpc_cidr_block),
             connection = ec2.Port.tcp(80),
