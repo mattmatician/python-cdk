@@ -14,6 +14,7 @@ rds_stack = CdkRdsStack(app, "cdk-rds",
                         private_security_groups=[vpc_stack.private_security_group])
 private_stack = CdkPrivateStack(app, "cdk-private",
                         vpc=vpc_stack.vpc,
-                        private_security_group=vpc_stack.private_security_group)
+                        private_security_group=vpc_stack.private_security_group,
+                        alb_security_group=vpc_stack.alb_security_group)
 
 app.synth()

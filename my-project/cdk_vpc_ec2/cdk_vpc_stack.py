@@ -36,5 +36,15 @@ class CdkVpcStack(Stack):
             vpc=self.vpc
         )
 
+        self.alb_security_group = ec2.SecurityGroup(self, "MPB-ALB-SG",
+            vpc=self.vpc
+        )
+
+        self.private_security_group.add_ingress_rule(
+            peer = self.alb_security_group,
+            connection = ec2.Port.tcp(9000),
+            description = "Allow ALB in"
+        )
+
         CfnOutput(self, "Output",
                        value=self.vpc.vpc_id)
