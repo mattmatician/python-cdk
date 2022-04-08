@@ -18,29 +18,19 @@ linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LIN
 
 class CdkPrivateStack(Stack):
 
-    def __init__(self, scope: Construct, id: str, vpc, private_security_group, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, vpc, alb_security_group, private_security_group, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         user_data_webserver = ec2.UserData.for_linux()
         user_data_webserver.add_commands("sudo dnf install httpd")
         user_data_webserver.add_commands("sudo systemctl enable --now httpd")
 
-        alb_security_group = ec2.SecurityGroup(self, "MPB-ALB-SG",
-            vpc=self.vpc
-        )
-
-        private_security_group.add_ingress_rule(
-            peer = alb_security_group,
-            connection = ec2.Port.tcp(9000),
-            description = "Allow ALB in"
-        )
-
         # Instance
         instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
-            security_group = self.private_security_group,
+            security_group = private_security_group,
             vpc = vpc,
         )
 
@@ -50,7 +40,7 @@ class CdkPrivateStack(Stack):
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
-            security_group = self.private_security_group,
+            security_group = private_security_group,
             vpc = vpc,
         )
 
