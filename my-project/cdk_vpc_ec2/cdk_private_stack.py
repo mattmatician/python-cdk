@@ -18,7 +18,7 @@ linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LIN
 
 class CdkPrivateStack(Stack):
 
-    def __init__(self, scope: Construct, id: str, vpc, alb_security_group, private_security_group, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, vpc, alb_security_group, private_security_group, cluster, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         user_data_webserver = ec2.UserData.for_linux()
@@ -62,16 +62,16 @@ class CdkPrivateStack(Stack):
             cpu=2048,
             memory_limit_mib=8192
         )
-        
+
         container = task_definition.add_container(
             "sonarqube",
             image=ecs.ContainerImage.from_registry("sonarqube:8.9.8-community"),
             memory_limit_mib=2048,
             command=["-Dsonar.search.javaAdditionalOpts=-Dnode.store.allow_mmap=false"],
             environment = {
-                "SONAR_JDBC_USERNAME": "admin",
-                "SONAR_JDBC_PASSWORD": "password",
-                "SONAR_JDBC_URL": "postgresql:///",
+                "SONAR_JDBC_USERNAME": "postgres",
+                "SONAR_JDBC_PASSWORD": cluster.secret.secret_value_from_json("password").to_string(),
+                "SONAR_JDBC_URL": "jdbc:postgres://" + cluster.secret.secret_value_from_json("host").to_string() + ":" + cluster.secret.secret_value_from_json("port").to_string() + "/mpb",
             }
         )
 
