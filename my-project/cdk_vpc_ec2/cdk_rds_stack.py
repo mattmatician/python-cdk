@@ -8,8 +8,9 @@ class CdkRdsStack(Stack):
     def __init__(self, scope: Construct, id: str, vpc, private_security_groups, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
-        cluster = rds.DatabaseCluster(self, "MPB-Database",
+        self.cluster = rds.DatabaseCluster(self, "MPB-Database",
             engine=rds.DatabaseClusterEngine.aurora_postgres(version = rds.AuroraPostgresEngineVersion.VER_13_4),
+            default_database_name="mpb",
             instance_props=rds.InstanceProps(
                 vpc=vpc,
                 vpc_subnets=ec2.SubnetSelection(subnet_group_name="DB")
@@ -17,4 +18,4 @@ class CdkRdsStack(Stack):
         ) 
 
         for sg in private_security_groups:
-            cluster.connections.allow_default_port_from(sg, "EC2 Autoscaling Group access Aurora")
+            self.cluster.connections.allow_default_port_from(sg, "EC2 Autoscaling Group access Aurora")
