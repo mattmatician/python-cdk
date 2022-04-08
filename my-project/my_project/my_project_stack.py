@@ -170,13 +170,13 @@ class MyProjectStack(Stack):
         container_sonar.add_port_mappings(port_mapping_sonar)
 
 
-        # non_scaled_service = ecs.FargateService(
-        #     self, "MPB-NonScaled-Service",
-        #     cluster=clusterWithoutASG,
-        #     task_definition=task_def_sample,
-        #     vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
-        #     security_groups = [private_security_group],
-        # )
+        non_scaled_service = ecs.FargateService(
+            self, "MPB-NonScaled-Service",
+            cluster=clusterWithoutASG,
+            task_definition=task_def_sample,
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
+            security_groups = [private_security_group],
+        )
 
         # # Create Service
         # scaled_service = ecs.Ec2Service(
@@ -215,12 +215,12 @@ class MyProjectStack(Stack):
         #     protocol=elbv2.ApplicationProtocol.HTTP,
         #     open=True
         # )
-        # listener8081 = lb.add_listener(
-        #     "PublicListener8081",
-        #     port=8081,
-        #     protocol=elbv2.ApplicationProtocol.HTTP,
-        #     open=True
-        # )
+        listener8081 = lb.add_listener(
+            "PublicListener8081",
+            port=8081,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            open=True
+        )
 
         health_check = elbv2.HealthCheck(
             interval=Duration.seconds(60),
@@ -236,13 +236,13 @@ class MyProjectStack(Stack):
         #     health_check=health_check,
         # )
 
-        # # Attach ALB to ECS Service
-        # listener8081.add_targets(
-        #     "NonScaledECS",
-        #     port=80,
-        #     targets=[non_scaled_service],
-        #     health_check=health_check,
-        # )
+        # Attach ALB to ECS Service
+        listener8081.add_targets(
+            "NonScaledECS",
+            port=80,
+            targets=[non_scaled_service],
+            health_check=health_check,
+        )
 
         CfnOutput(
             self, "LoadBalancerDNS",
