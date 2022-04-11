@@ -231,6 +231,12 @@ class MyProjectStack(Stack):
             timeout=Duration.seconds(5)
         )
 
+        health_check_sonar = elbv2.HealthCheck(
+            interval=Duration.seconds(60),
+            path="/api/system/status",
+            timeout=Duration.seconds(5)
+        )
+
         # Attach ALB to ECS Service
         listener8080.add_targets(
             "ScaledECS",
@@ -240,6 +246,7 @@ class MyProjectStack(Stack):
                 container_name="MPB-sonarqube",
                 container_port=9000
             )],
+            health_check=health_check_sonar,
         )
 
         # Attach ALB to ECS Service
