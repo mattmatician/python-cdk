@@ -61,6 +61,14 @@ class MyProjectStack(Stack):
             description = "Allow ALB in"
         )
 
+        # Create ALB
+        lb = elbv2.ApplicationLoadBalancer(
+            self, "MPB-ALB",
+            vpc=vpc,
+            internet_facing=True,
+            security_group = alb_security_group
+        )
+
         cluster = rds.DatabaseCluster(self, "MPB-Database",
             engine=rds.DatabaseClusterEngine.aurora_postgres(version = rds.AuroraPostgresEngineVersion.VER_13_4),
             default_database_name="mpb",
@@ -151,9 +159,9 @@ class MyProjectStack(Stack):
         )
 
         container_sonar = task_def_sonar.add_container(
-            "sonarqube",
+            "MPB-sonarqube",
             image=ecs.ContainerImage.from_registry("sonarqube:8.9.8-community"),
-            memory_limit_mib=2048,
+            memory_limit_mib=1536,
             command=["-Dsonar.search.javaAdditionalOpts=-Dnode.store.allow_mmap=false"],
             environment = {
                 "SONAR_JDBC_USERNAME": "postgres",
@@ -179,14 +187,14 @@ class MyProjectStack(Stack):
             security_groups = [private_security_group],
         )
 
-        # # Create Service
-        # scaled_service = ecs.Ec2Service(
-        #     self, "MPB-Scaled-Service",
-        #     cluster=clusterWithASG,
-        #     task_definition=task_def_sonar,
-        #     vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
-        #     security_groups = [private_security_group],
-        # )
+        # Create Service
+        scaled_service = ecs.Ec2Service(
+            self, "MPB-Scaled-Service",
+            cluster=clusterWithASG,
+            task_definition=task_def_sonar,
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
+            security_groups = [private_security_group],
+        )
         
         # scalableTarget = scaled_service.auto_scale_task_count(
         #     min_capacity = 1,
@@ -203,19 +211,13 @@ class MyProjectStack(Stack):
         #     min_capacity = 2,
         # )
 
-        # Create ALB
-        lb = elbv2.ApplicationLoadBalancer(
-            self, "MPB-ALB",
-            vpc=vpc,
-            internet_facing=True,
-            security_group = alb_security_group
+
+        listener8080 = lb.add_listener(
+            "PublicListener8080",
+            port=8080,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            open=True
         )
-        # listener8080 = lb.add_listener(
-        #     "PublicListener8080",
-        #     port=8080,
-        #     protocol=elbv2.ApplicationProtocol.HTTP,
-        #     open=True
-        # )
         listener8081 = lb.add_listener(
             "PublicListener8081",
             port=8081,
@@ -230,12 +232,15 @@ class MyProjectStack(Stack):
         )
 
         # Attach ALB to ECS Service
-        # listener8080.add_targets(
-        #     "ScaledECS",
-        #     port=80,
-        #     targets=[scaled_service],
-        #     health_check=health_check,
-        # )
+        listener8080.add_targets(
+            "ScaledECS",
+            port=9000,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            targets=[scaled_service.load_balancer_target(
+                container_name="MPB-sonarqube",
+                container_port=9000
+            )],
+        )
 
         # Attach ALB to ECS Service
         listener8081.add_targets(
