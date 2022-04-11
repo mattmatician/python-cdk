@@ -1,6 +1,7 @@
 import aws_cdk.aws_autoscaling as autoscaling
 import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_ecs as ecs
+import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_elasticloadbalancingv2_targets as targets
 import aws_cdk.aws_rds as rds
@@ -22,7 +23,6 @@ class MyProjectStack(Stack):
         vpc = ec2.Vpc(self, "VPC",
                            max_azs=3,
                            cidr="10.10.0.0/16",
-                           # configuration will create 3 groups in 2 AZs = 6 subnets.
                            subnet_configuration=[ec2.SubnetConfiguration(
                                subnet_type=ec2.SubnetType.PUBLIC,
                                name="Public",
@@ -239,6 +239,12 @@ class MyProjectStack(Stack):
             targets=[non_scaled_service],
             health_check=health_check,
         )
+
+        # Set up a bucket
+        bucket = s3.Bucket(self, "example-bucket",
+                           access_control=s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL,
+                           encryption=s3.BucketEncryption.S3_MANAGED,
+                           block_public_access=s3.BlockPublicAccess.BLOCK_ALL)
 
         CfnOutput(
             self, "LoadBalancerDNS",
