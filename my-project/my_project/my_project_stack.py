@@ -79,24 +79,17 @@ class MyProjectStack(Stack):
         user_data_webserver.add_commands("echo 'Hello World' | tee /var/www/html/health")
         user_data_webserver.add_commands("sudo systemctl enable --now httpd")
 
-        # Build instancess
-        instance1 = ec2.Instance(self, "MPB-Instance-1",
-            instance_type=ec2.InstanceType("t3a.nano"),
-            machine_image=linux_ami,
-            user_data = user_data_webserver,
-            security_group = private_security_group,
-            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
-            vpc = vpc,
-        )
-
-        instance2 = ec2.Instance(self, "MPB-Instance-2",
-            instance_type=ec2.InstanceType("t3a.nano"),
-            machine_image=linux_ami,
-            user_data = user_data_webserver,
-            security_group = private_security_group,
-            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
-            vpc = vpc,
-        )
+        # Build instances
+        instances=[]
+        for i in range(6):
+            instances.append(ec2.Instance(self, "MPB-Instance-" + str(i),
+                instance_type=ec2.InstanceType("t3a.nano"),
+                machine_image=linux_ami,
+                user_data = user_data_webserver,
+                security_group = private_security_group,
+                vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
+                vpc = vpc,
+            ))
 
         # Create ECS Cluster for scaling
         clusterWithASG = ecs.Cluster(
