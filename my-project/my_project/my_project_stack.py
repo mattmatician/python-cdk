@@ -1,16 +1,12 @@
-from aws_cdk import CfnOutput, Stack, Duration
-import aws_cdk.aws_ec2 as ec2
-import aws_cdk.aws_rds as rds
-import aws_cdk.aws_ecs as ecs
-import aws_cdk.aws_ecs_patterns as ecs_patterns
-import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_autoscaling as autoscaling
-import aws_cdk.aws_applicationautoscaling as appscaling
+import aws_cdk.aws_ec2 as ec2
+import aws_cdk.aws_ecs as ecs
+import aws_cdk.aws_elasticloadbalancingv2 as elbv2
 import aws_cdk.aws_elasticloadbalancingv2_targets as targets
+import aws_cdk.aws_rds as rds
+from aws_cdk import CfnOutput, Duration, Stack
 from constructs import Construct
 
-ec2_type = "t2.micro"
-key_name = "matt2"  # Setup key_name for EC2 instance login
 linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX,
                                  edition=ec2.AmazonLinuxEdition.STANDARD,
                                  virtualization=ec2.AmazonLinuxVirt.HVM,
@@ -22,8 +18,7 @@ class MyProjectStack(Stack):
     def __init__(self, scope: Construct, id: str, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
-        # The code that defines your stack goes here
-
+        # Create VPC (and subnets, IGW, NATs)
         vpc = ec2.Vpc(self, "VPC",
                            max_azs=3,
                            cidr="10.10.0.0/16",
@@ -46,19 +41,14 @@ class MyProjectStack(Stack):
                            nat_gateways=3,
                            )
 
-        
+        # Add secuity group for Private layer
         private_security_group = ec2.SecurityGroup(self, "MPB-PrivateGroup",
             vpc=vpc
         )
 
+        # Add secuity group for ALB
         alb_security_group = ec2.SecurityGroup(self, "MPB-ALB-SG",
             vpc=vpc
-        )
-
-        private_security_group.add_ingress_rule(
-            peer = alb_security_group,
-            connection = ec2.Port.tcp(9000),
-            description = "Allow ALB in"
         )
 
         # Create ALB
@@ -69,6 +59,7 @@ class MyProjectStack(Stack):
             security_group = alb_security_group
         )
 
+        # Create RDS Database
         cluster = rds.DatabaseCluster(self, "MPB-Database",
             engine=rds.DatabaseClusterEngine.aurora_postgres(version = rds.AuroraPostgresEngineVersion.VER_13_4),
             default_database_name="mpb",
@@ -78,15 +69,17 @@ class MyProjectStack(Stack):
             )
         ) 
 
+        # Allow SG for Private layer to access the DB
         for sg in [private_security_group]:
             cluster.connections.allow_default_port_from(sg, "EC2 Autoscaling Group access Aurora")
 
 
+        # Configure User-Data to install httpd on initial startup.
         user_data_webserver = ec2.UserData.for_linux()
         user_data_webserver.add_commands("sudo dnf install httpd")
         user_data_webserver.add_commands("sudo systemctl enable --now httpd")
 
-        # Instance
+        # Build instancess
         instance1 = ec2.Instance(self, "MPB-Instance-1",
             instance_type=ec2.InstanceType("t3a.nano"),
             machine_image=linux_ami,
@@ -107,41 +100,45 @@ class MyProjectStack(Stack):
 
         instanceTarget2 = targets.InstanceTarget(instance=instance2)
 
+        # Create ECS Cluster for scaling
         clusterWithASG = ecs.Cluster(
             self, 'MPB-EcsClusterWithASG',
             vpc=vpc
         )
 
-        clusterWithoutASG = ecs.Cluster(
-            self, 'MPB-EcsClusterWithoutASG',
-            vpc=vpc
-        )
-
+        # Create ASG
         ecs_asg = autoscaling.AutoScalingGroup(
             self, "MPB-ASG-ECS",
             instance_type=ec2.InstanceType("t3a.small"),
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             vpc=vpc,
         )
+        # Configure ASG as ECS Capacity Provider and attach it to ECS Cluster
         capacity_provider = ecs.AsgCapacityProvider(self, "AsgCapacityProvider",
             auto_scaling_group=ecs_asg
         )
         clusterWithASG.add_asg_capacity_provider(capacity_provider)
 
-        # Create Task Definition
+        # Create ECS Cluster without scaling
+        clusterWithoutASG = ecs.Cluster(
+            self, 'MPB-EcsClusterWithoutASG',
+            vpc=vpc
+        )
+
+        # Create Sample Task Definition
         task_def_sample = ecs.FargateTaskDefinition(
             self, "MPB-TaskDef-Sample",
             cpu=1024,
             memory_limit_mib=2048
         )
 
+        # Create Sample Container
         container_sample = task_def_sample.add_container(
             "MPB-sample",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
             memory_limit_mib=256,
         )
-
-
+        # Configure Port Mapping for Sample Container
         port_mapping_sample = ecs.PortMapping(
             container_port=80,
             host_port=80,
@@ -150,14 +147,13 @@ class MyProjectStack(Stack):
         container_sample.add_port_mappings(port_mapping_sample)
 
 
-        # Create Task Definition
+        # Create SonarQube Task Definition
         task_def_sonar = ecs.Ec2TaskDefinition(
             self, "MPB-TaskDef-Sonar",
             network_mode=ecs.NetworkMode.AWS_VPC
-            # cpu=2048,
-            # memory_limit_mib=8192
         )
 
+        # Create container for SonarQube, configure it to use Postgres RDS
         container_sonar = task_def_sonar.add_container(
             "MPB-sonarqube",
             image=ecs.ContainerImage.from_registry("sonarqube:8.9.8-community"),
@@ -171,6 +167,7 @@ class MyProjectStack(Stack):
             logging = ecs.AwsLogDriver(stream_prefix = "myapp")
         )
 
+        # Configure Port Mapping for SonarQube Container
         port_mapping_sonar = ecs.PortMapping(
             container_port=9000,
             host_port=9000,
@@ -178,7 +175,7 @@ class MyProjectStack(Stack):
         )
         container_sonar.add_port_mappings(port_mapping_sonar)
 
-
+        # Create Service for Sample (using Fargate)
         non_scaled_service = ecs.FargateService(
             self, "MPB-NonScaled-Service",
             cluster=clusterWithoutASG,
@@ -187,7 +184,7 @@ class MyProjectStack(Stack):
             security_groups = [private_security_group],
         )
 
-        # Create Service
+        # Create Service for SonarQube (using EC2)
         scaled_service = ecs.Ec2Service(
             self, "MPB-Scaled-Service",
             cluster=clusterWithASG,
@@ -196,22 +193,7 @@ class MyProjectStack(Stack):
             security_groups = [private_security_group],
         )
         
-        # scalableTarget = scaled_service.auto_scale_task_count(
-        #     min_capacity = 1,
-        #     max_capacity = 3
-        # )
-
-        # scalableTarget.scale_on_schedule('DaytimeScaleDown',
-        #     schedule = appscaling.Schedule.cron(hour = "8", minute = "0"),
-        #     min_capacity = 1,
-        # )
-
-        # scalableTarget.scale_on_schedule('EveningRushScaleUp',
-        #     schedule = appscaling.Schedule.cron(hour = "20", minute = "0"),
-        #     min_capacity = 2,
-        # )
-
-
+        # Configure listeners for services
         listener8080 = lb.add_listener(
             "PublicListener8080",
             port=8080,
@@ -225,6 +207,7 @@ class MyProjectStack(Stack):
             open=True
         )
 
+        # Configure healthchecks for services
         health_check = elbv2.HealthCheck(
             interval=Duration.seconds(60),
             path="/health",
@@ -237,7 +220,7 @@ class MyProjectStack(Stack):
             timeout=Duration.seconds(5)
         )
 
-        # Attach ALB to ECS Service
+        # Attach ALB listeners to ECS Services
         listener8080.add_targets(
             "ScaledECS",
             port=9000,
