@@ -158,8 +158,9 @@ class MyProjectStack(Stack):
             environment = {
                 "SONAR_JDBC_USERNAME": "postgres",
                 "SONAR_JDBC_PASSWORD": cluster.secret.secret_value_from_json("password").to_string(),
-                "SONAR_JDBC_URL": "jdbc:postgres://" + cluster.secret.secret_value_from_json("host").to_string() + ":" + cluster.secret.secret_value_from_json("port").to_string() + "/mpb",
-            }
+                "SONAR_JDBC_URL": "jdbc:postgresql://" + cluster.secret.secret_value_from_json("host").to_string() + ":" + cluster.secret.secret_value_from_json("port").to_string() + "/mpb",
+            },
+            logging = ecs.AwsLogDriver(stream_prefix = "myapp")
         )
 
         port_mapping_sonar = ecs.PortMapping(
