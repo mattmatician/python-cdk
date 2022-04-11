@@ -80,7 +80,7 @@ class MyProjectStack(Stack):
 
         # Instance
         instance1 = ec2.Instance(self, "MPB-Instance-1",
-            instance_type=ec2.InstanceType("t3.nano"),
+            instance_type=ec2.InstanceType("t3a.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
             security_group = private_security_group,
@@ -90,7 +90,7 @@ class MyProjectStack(Stack):
         instanceTarget1 = targets.InstanceTarget(instance=instance1)
 
         instance2 = ec2.Instance(self, "MPB-Instance-2",
-            instance_type=ec2.InstanceType("t3.nano"),
+            instance_type=ec2.InstanceType("t3a.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
             security_group = private_security_group,
@@ -111,7 +111,7 @@ class MyProjectStack(Stack):
 
         ecs_asg = autoscaling.AutoScalingGroup(
             self, "MPB-ASG-ECS",
-            instance_type=ec2.InstanceType("t2.micro"),
+            instance_type=ec2.InstanceType("t3a.small"),
             machine_image=ecs.EcsOptimizedImage.amazon_linux2(),
             vpc=vpc,
         )
