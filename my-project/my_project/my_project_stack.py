@@ -128,7 +128,7 @@ class MyProjectStack(Stack):
         )
 
         container_sample = task_def_sample.add_container(
-            "sonarqube",
+            "MPB-sample",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
             memory_limit_mib=256,
         )
