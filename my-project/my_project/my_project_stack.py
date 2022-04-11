@@ -8,7 +8,7 @@ import aws_cdk.aws_rds as rds
 from aws_cdk import CfnOutput, Duration, Stack
 from constructs import Construct
 
-linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX,
+linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
                                  edition=ec2.AmazonLinuxEdition.STANDARD,
                                  virtualization=ec2.AmazonLinuxVirt.HVM,
                                  storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE
@@ -76,7 +76,8 @@ class MyProjectStack(Stack):
 
         # Configure User-Data to install httpd on initial startup.
         user_data_webserver = ec2.UserData.for_linux()
-        user_data_webserver.add_commands("sudo dnf install httpd")
+        user_data_webserver.add_commands("sudo yum install -y httpd")
+        user_data_webserver.add_commands("echo 'Hello World' | tee /var/www/html/health")
         user_data_webserver.add_commands("sudo systemctl enable --now httpd")
 
         # Build instancess
@@ -85,20 +86,18 @@ class MyProjectStack(Stack):
             machine_image=linux_ami,
             user_data = user_data_webserver,
             security_group = private_security_group,
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
             vpc = vpc,
         )
-
-        instanceTarget1 = targets.InstanceTarget(instance=instance1)
 
         instance2 = ec2.Instance(self, "MPB-Instance-2",
             instance_type=ec2.InstanceType("t3a.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
             security_group = private_security_group,
+            vpc_subnets=ec2.SubnetSelection(subnet_group_name="Private"),
             vpc = vpc,
         )
-
-        instanceTarget2 = targets.InstanceTarget(instance=instance2)
 
         # Create ECS Cluster for scaling
         clusterWithASG = ecs.Cluster(
@@ -232,7 +231,6 @@ class MyProjectStack(Stack):
             health_check=health_check_sonar,
         )
 
-        # Attach ALB to ECS Service
         listener8081.add_targets(
             "NonScaledECS",
             port=80,
