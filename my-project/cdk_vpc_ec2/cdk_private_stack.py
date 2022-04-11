@@ -18,7 +18,7 @@ linux_ami = ec2.AmazonLinuxImage(generation=ec2.AmazonLinuxGeneration.AMAZON_LIN
 
 class CdkPrivateStack(Stack):
 
-    def __init__(self, scope: Construct, id: str, vpc, **kwargs) -> None:
+    def __init__(self, scope: Construct, id: str, vpc, alb_security_group, private_security_group, cluster, **kwargs) -> None:
         super().__init__(scope, id, **kwargs)
 
         user_data_webserver = ec2.UserData.for_linux()
@@ -30,6 +30,7 @@ class CdkPrivateStack(Stack):
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
+            security_group = private_security_group,
             vpc = vpc,
         )
 
@@ -39,6 +40,7 @@ class CdkPrivateStack(Stack):
             instance_type=ec2.InstanceType("t3.nano"),
             machine_image=linux_ami,
             user_data = user_data_webserver,
+            security_group = private_security_group,
             vpc = vpc,
         )
 
@@ -56,16 +58,26 @@ class CdkPrivateStack(Stack):
 
         # Create Task Definition
         task_definition = ecs.FargateTaskDefinition(
-            self, "MPB-TaskDef")
-        
-        container = task_definition.add_container(
-            "web",
-            image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample"),
-            memory_limit_mib=256
+            self, "MPB-TaskDef",
+            cpu=2048,
+            memory_limit_mib=8192
         )
+
+        container = task_definition.add_container(
+            "sonarqube",
+            image=ecs.ContainerImage.from_registry("sonarqube:8.9.8-community"),
+            memory_limit_mib=2048,
+            command=["-Dsonar.search.javaAdditionalOpts=-Dnode.store.allow_mmap=false"],
+            environment = {
+                "SONAR_JDBC_USERNAME": "postgres",
+                "SONAR_JDBC_PASSWORD": cluster.secret.secret_value_from_json("password").to_string(),
+                "SONAR_JDBC_URL": "jdbc:postgres://" + cluster.secret.secret_value_from_json("host").to_string() + ":" + cluster.secret.secret_value_from_json("port").to_string() + "/mpb",
+            }
+        )
+
         port_mapping = ecs.PortMapping(
-            container_port=80,
-            host_port=80,
+            container_port=9000,
+            host_port=9000,
             protocol=ecs.Protocol.TCP
         )
         container.add_port_mappings(port_mapping)
@@ -98,7 +110,8 @@ class CdkPrivateStack(Stack):
         lb = elbv2.ApplicationLoadBalancer(
             self, "MPB-ALB",
             vpc=vpc,
-            internet_facing=True
+            internet_facing=True,
+            security_group = alb_security_group
         )
         listener8080 = lb.add_listener(
             "PublicListener8080",
