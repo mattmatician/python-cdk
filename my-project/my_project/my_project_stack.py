@@ -3,7 +3,6 @@ import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_ecs as ecs
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_elasticloadbalancingv2 as elbv2
-import aws_cdk.aws_elasticloadbalancingv2_targets as targets
 import aws_cdk.aws_rds as rds
 from aws_cdk import CfnOutput, Duration, Stack
 from constructs import Construct
